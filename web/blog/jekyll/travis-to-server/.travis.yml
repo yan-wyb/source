@@ -1,0 +1,15 @@
+language: ruby
+rvm:
+- 2.7.0
+branches:
+  only:
+  - master
+install:
+- bundle install
+script: jekyll build
+before_install:
+- openssl aes-256-cbc -K $encrypted_xxxxxxxxxxxxxxxx_key -iv $encrypted_xxxxxxxxxxxxxxxx_iv
+  -in .travis/id_rsa.enc -out ~/.ssh/id_rsa -d
+atfer_success:
+- chmod 600 ~/.ssh/id_rsa
+- ssh ${user}@xx.x.xx.x -o StrictHostKeyChecking=no 'cd /path/to/blog && bash .travis/deploy.sh && exit'

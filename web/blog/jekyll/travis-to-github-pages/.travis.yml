@@ -1,0 +1,12 @@
+language: ruby
+rvm:
+- 2.7.0
+branches:
+  only:
+  - master
+install:
+- bundle install
+script: bundle exec rake deploy --quiet
+env:
+  global:
+    secure: "HJOOSVoCDkl9IkmPzUNlwN5nScCuNpA0Zs3/23up7gKGIvj8vd3stzDLjylaN+Kv/HGbY0hYjrGFMtKCITMh+q16uaJvuMcVeto2Lh2gbge8vT/bdYamwcqOc8OcS6FlSkBlWDnwmJY/YjQKrjjU9yEOxUpfDoZ6FgWbWp5asWXT4KmxWqQpEJf+3ufzy6UGCth5SCOC5zluujO1FjoS72pQNP5HWPBKF3Hy3eSqLc6N35mY/rTZFOB/oJANaZWX0HdSAJYZA0YyJiekeZGcSDxbZcELRhT+ZbQPQL/RvU6DzWaX+HB0SsogUs2KhyZyy0JSoDBbUIAaecKW15WzRXukwpANbF3KyfNG3P2ObQNhr1CJLsclRjBfM1aB4NCas8HLe+eQsTufgl9gPy4HXH4Tf+17zDTIGHc7gMsKNpvgMZnLwpDXb5927V94ZMPlay5FdyUc6cK0Jh9SF9ZGfwWOypY5r3jzMTODQjnGp1dFJq5Bb2NJPtOd9G5ByOrb58uYSm7bQA/bz84woOW9JDeOMHhgVgfl+q2JDYGrSuRK8Q7T45HrBmXBxnAo8x70ZxYLe9XnmflKsf38FjhtiGk="

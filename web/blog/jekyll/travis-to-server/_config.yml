@@ -1,0 +1,62 @@
+# Site
+name: ""
+title: ""
+description: ""
+logo: 'assets/images/logo.png'
+favicon: 'assets/images/logo.png'
+include: ["_pages"]
+permalink: /:year/:month/:day/:title:output_ext
+
+timezone: PRC
+
+# Authors
+author:
+  name:
+  avatar:
+  display_name:
+
+# Plugins
+plugins:
+  - jekyll-paginate
+  - jekyll-sitemap
+  - jekyll-feed
+  - jekyll-seo-tag
+  - jekyll-archives
+  - jekyll-last-modified-at
+    
+# Archives
+jekyll-archives:
+  enabled:
+    - categories
+    - tags
+  layout: archive
+    
+# Pagination 
+paginate: 3
+paginate_path: /page:num
+    
+# Other
+markdown: kramdown
+
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    block:
+      line_numbers: true
+
+exclude:
+  - README.md
+  - Gemfile
+  - Gemfile.lock
+  - changelog.md
+  - "*.Rmd"
+  - vendor
+  - .travis.yml
+  - LICENSE.txt
+  - .travis
+
+last-modified-at:
+    date-format: '%y-%b-%d-%h-%m-%s'
+
+repo:
