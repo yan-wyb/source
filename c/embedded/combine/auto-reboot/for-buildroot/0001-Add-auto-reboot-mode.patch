@@ -1,0 +1,260 @@
+From ecaf90ae41d7b780f5558a3974e733974f8e40c8 Mon Sep 17 00:00:00 2001
+From: yan <yan-wyb@foxmail.com>
+Date: Fri, 31 Jul 2020 09:47:36 +0800
+Subject: [PATCH] Add auto reboot mode
+
+Signed-off-by: yan <yan-wyb@foxmail.com>
+---
+ .../bl33/arch/arm/include/asm/reboot.h        |  1 +
+ .../bl33/board/amlogic/configs/name.h          | 30 +---------
+ .../uboot-repo/bl33/common/cmd_reboot.c       |  8 +++
+ buildroot/package/Config.in                   |  1 +
+ .../busybox/0006-add-reboot-test-mode.patch   | 56 +++++++++++++++++++
+ buildroot/package/name_test/Config.in          |  4 ++
+ .../package/name_test/src/S98name_auto_reboot   |  8 +++
+ buildroot/package/name_test/name_test.mk        | 20 +++++++
+ .../aml-4.9/drivers/amlogic/reboot/reboot.c   |  2 +
+ kernel/aml-4.9/include/linux/amlogic/reboot.h |  1 +
+ 10 files changed, 102 insertions(+), 29 deletions(-)
+ create mode 100644 buildroot/package/busybox/0006-add-reboot-test-mode.patch
+ create mode 100644 buildroot/package/name_test/Config.in
+ create mode 100644 buildroot/package/name_test/src/S98name_auto_reboot
+ create mode 100644 buildroot/package/name_test/name_test.mk
+
+diff --git a/bootloader/uboot-repo/bl33/arch/arm/include/asm/reboot.h b/bootloader/uboot-repo/bl33/arch/arm/include/asm/reboot.h
+index 0cdc3cdf0..497c92bf6 100644
+--- a/bootloader/uboot-repo/bl33/arch/arm/include/asm/reboot.h
++++ b/bootloader/uboot-repo/bl33/arch/arm/include/asm/reboot.h
+@@ -56,6 +56,7 @@ Reboot reason AND corresponding env setting:
+ #define AMLOGIC_KERNEL_PANIC			12
+ #define AMLOGIC_WATCHDOG_REBOOT			13
+ #define AMLOGIC_RECOVERY_QUIESCENT_REBOOT	14
++#define AMLOGIC_AUTO_REBOOT             15
+ 
+ /*
+ old version env
+diff --git a/bootloader/uboot-repo/bl33/board/amlogic/configs/name.h b/bootloader/uboot-repo/bl33/board/amlogic/configs/name.h
+index 2f6efe102..7e0491dc8 100644
+--- a/bootloader/uboot-repo/bl33/board/amlogic/configs/name.h
++++ b/bootloader/uboot-repo/bl33/board/amlogic/configs/name.h
+@@ -132,37 +132,9 @@
+             "\0"\
+         "storeargs="\
+             "setenv bootargs ${initargs} ${fs_type} reboot_mode_android=${reboot_mode_android} logo=${display_layer},loaded,${fb_addr} vout=${outputmode},enable panel_type=${panel_type} hdmitx=${cecconfig},${colorattribute} hdmimode=${hdmimode} frac_rate_policy=${frac_rate_policy} hdmi_read_edid=${hdmi_read_edid} cvbsmode=${cvbsmode} osd_reverse=${osd_reverse} video_reverse=${video_reverse} irq_check_en=${Irq_check_en}  androidboot.selinux=${EnableSelinux} androidboot.firstboot=${firstboot} jtag=${jtag}; "\
+-	"setenv bootargs ${bootargs} androidboot.hardware=amlogic;"\
++	"setenv bootargs ${bootargs} androidboot.hardware=amlogic reboot_mode=${reboot_mode};"\
+             "run cmdline_keys;"\
+             "\0"\
+-        "switch_bootmode="\
+-            "get_rebootmode;"\
+-            "if test ${reboot_mode} = factory_reset; then "\
+-                    "setenv reboot_mode_android ""normal"";"\
+-                    "run storeargs;"\
+-                    "run recovery_from_flash;"\
+-            "else if test ${reboot_mode} = update; then "\
+-                    "setenv reboot_mode_android ""normal"";"\
+-                    "run storeargs;"\
+-                    "run update;"\
+-            "else if test ${reboot_mode} = quiescent; then "\
+-                    "setenv reboot_mode_android ""quiescent"";"\
+-                    "run storeargs;"\
+-                    "setenv bootargs ${bootargs} androidboot.quiescent=1;"\
+-            "else if test ${reboot_mode} = recovery_quiescent; then "\
+-                    "setenv reboot_mode_android ""quiescent"";"\
+-                    "run storeargs;"\
+-                    "setenv bootargs ${bootargs} androidboot.quiescent=1;"\
+-                    "run recovery_from_flash;"\
+-            "else if test ${reboot_mode} = cold_boot; then "\
+-                    "setenv reboot_mode_android ""normal"";"\
+-                    "run storeargs;"\
+-            "else if test ${reboot_mode} = fastboot; then "\
+-                "setenv reboot_mode_android ""normal"";"\
+-                "run storeargs;"\
+-                "fastboot;"\
+-            "fi;fi;fi;fi;fi;fi;"\
+-            "\0" \
+         "storeboot="\
+             "boot_cooling;"\
+             "get_system_as_root_mode;"\
+diff --git a/bootloader/uboot-repo/bl33/common/cmd_reboot.c b/bootloader/uboot-repo/bl33/common/cmd_reboot.c
+index df9f0ca6f..40c488523 100644
+--- a/bootloader/uboot-repo/bl33/common/cmd_reboot.c
++++ b/bootloader/uboot-repo/bl33/common/cmd_reboot.c
+@@ -115,6 +115,11 @@ int do_get_rebootmode (cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[]
+ 			setenv("reboot_mode","recovery_quiescent");
+ 			break;
+ 		}
++        case AMLOGIC_AUTO_REBOOT:
++        {
++            setenv("reboot_mode","auto_reboot");
++            break;
++        }
+ 		default:
+ 		{
+ 			setenv("reboot_mode","charging");
+@@ -174,6 +179,8 @@ int do_reboot (cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
+ 			reboot_mode_val = AMLOGIC_KERNEL_PANIC;
+ 		else if (strcmp(mode, "rpmbp") == 0)
+ 			reboot_mode_val = AMLOGIC_RPMBP_REBOOT;
++        else if (strcmp(mode, "auto_reboot") == 0)
++            reboot_mode_val = AMLOGIC_AUTO_REBOOT;
+ 		else {
+ 			printf("Can not find match reboot mode, use normal by default\n");
+ 			reboot_mode_val = AMLOGIC_NORMAL_BOOT;
+@@ -233,6 +240,7 @@ U_BOOT_CMD(
+ 	"    suspend_off\n"
+ 	"    hibernate\n"
+ 	"    crash_dump\n"
++    "    auto_reboot\n"
+ );
+ 
+ U_BOOT_CMD(
+diff --git a/buildroot/package/Config.in b/buildroot/package/Config.in
+index 4ea800b6e..49f7902ea 100644
+--- a/buildroot/package/Config.in
++++ b/buildroot/package/Config.in
+@@ -252,6 +252,7 @@ menu "Filesystem and flash utilities"
+ 	source "package/udftools/Config.in"
+ 	source "package/unionfs/Config.in"
+ 	source "package/xfsprogs/Config.in"
++    source "package/name_test/Config.in"
+ endmenu
+ 
+ menu "Fonts, cursors, icons, sounds and themes"
+diff --git a/buildroot/package/busybox/0006-add-reboot-test-mode.patch b/buildroot/package/busybox/0006-add-reboot-test-mode.patch
+new file mode 100644
+index 000000000..a5595a042
+--- /dev/null
++++ b/buildroot/package/busybox/0006-add-reboot-test-mode.patch
+@@ -0,0 +1,56 @@
++diff -Nuar busybox-1.29.3.orig/init/halt.c busybox-1.29.3/init/halt.c
++--- busybox-1.29.3.orig/init/halt.c	2020-07-29 16:19:53.699110396 +0800
+++++ busybox-1.29.3/init/halt.c	2020-07-29 16:20:27.399587425 +0800
++@@ -170,6 +170,7 @@
++ 		RB_AUTOBOOT
++ 	};
++ 	static const smallint signals[] = { SIGUSR1, SIGUSR2, SIGTERM };
+++	char auto_reboot = 0;
++ 
++ 	int delay = 0;
++ 	int which, flags, rc;
++@@ -192,7 +193,7 @@
++ 	 * in order to not break scripts.
++ 	 * -i (shut down network interfaces) is ignored.
++ 	 */
++-	flags = getopt32(argv, "d:+nfwi", &delay);
+++	flags = getopt32(argv, "d:+nfwit", &delay);
++ 
++ 	sleep(delay);
++ 
++@@ -204,6 +205,10 @@
++ 	if (!(flags & 2)) /* no -n */
++ 		sync();
++ 
+++	if (flags & 32)
+++		auto_reboot = 1;
+++
+++
++ 	/* Perform action. */
++ 	rc = 1;
++ 	if (!(flags & 4)) { /* no -f */
++@@ -240,7 +245,10 @@
++ 			}
++ 		}
++ 	} else {
++-		rc = reboot(magic[which]);
+++		if (auto_reboot)
+++			rc = reboot(0xA1B2C3D4, 537993216, 0xA1B2C3D4, "auto_reboot");
+++		else
+++			rc = reboot(0xA1B2C3D4, 537993216, 0xA1B2C3D4, "");
++ 	}
++ 
++ 	if (rc)
++diff -Nuar busybox-1.29.3.orig/init/reboot.h busybox-1.29.3/init/reboot.h
++--- busybox-1.29.3.orig/init/reboot.h	2020-07-29 16:19:53.699110396 +0800
+++++ busybox-1.29.3/init/reboot.h	2020-07-29 16:20:14.695403698 +0800
++@@ -3,7 +3,8 @@
++  * shared between init.c and halt.c.
++  */
++ 
++-#include <sys/reboot.h>
+++//#include <sys/reboot.h>
+++#include <linux/reboot.h>
++ 
++ #ifndef RB_HALT_SYSTEM
++ # if defined(__linux__)
+diff --git a/buildroot/package/name_test/Config.in b/buildroot/package/name_test/Config.in
+new file mode 100644
+index 000000000..6a4119d37
+--- /dev/null
++++ b/buildroot/package/name_test/Config.in
+@@ -0,0 +1,4 @@
++config BR2_PACKAGE_NAME_TEST
++    bool "name_test"
++    help
++        use for name test
+diff --git a/buildroot/package/name_test/src/S98name_auto_reboot b/buildroot/package/name_test/src/S98name_auto_reboot
+new file mode 100644
+index 000000000..ebdd7dde5
+--- /dev/null
++++ b/buildroot/package/name_test/src/S98name_auto_reboot
+@@ -0,0 +1,8 @@
++#!/bin/bash
++
++if cat /proc/cmdline | grep -q auto_reboot > /dev/null; then
++    sleep 15
++    sync
++    reboot -f -t
++fi
++
+diff --git a/buildroot/package/name_test/name_test.mk b/buildroot/package/name_test/name_test.mk
+new file mode 100644
+index 000000000..fa87505c3
+--- /dev/null
++++ b/buildroot/package/name_test/name_test.mk
+@@ -0,0 +1,20 @@
++###############################################################################################################################
++#
++#   name_test
++#
++###############################################################################################################################
++
++NAME_TEST_VERSION = 20200727
++NAME_TEST_SITE_METHOD = local
++NAME_TEST_SITE = ${TOPDIR}/package/name_test/src
++
++define NAME_TEST_INSTALL_TARGET_CMDS
++
++        mkdir -p ${TARGET_DIR}/etc/init.d
++
++        $(INSTALL) -D -m 755 $(@D)/S98name_auto_reboot $(TARGET_DIR)/etc/init.d/
++
++endef
++
++$(eval $(generic-package))
++
+diff --git a/kernel/aml-4.9/drivers/amlogic/reboot/reboot.c b/kernel/aml-4.9/drivers/amlogic/reboot/reboot.c
+index 80cf73760..77c42777a 100644
+--- a/kernel/aml-4.9/drivers/amlogic/reboot/reboot.c
++++ b/kernel/aml-4.9/drivers/amlogic/reboot/reboot.c
+@@ -65,6 +65,8 @@ static u32 parse_reason(const char *cmd)
+ 				strcmp(cmd, "quiescent,recovery") == 0 ||
+ 				strcmp(cmd, "quiescent,factory_reset") == 0)
+ 			reboot_reason = MESON_RECOVERY_QUIESCENT_REBOOT;
++        else if (strcmp(cmd, "auto_reboot") == 0)
++            reboot_reason = MESON_AUTO_REBOOT;
+ 	} else {
+ 		if (kernel_panic) {
+ 			if (strcmp(kernel_panic, "kernel_panic") == 0) {
+diff --git a/kernel/aml-4.9/include/linux/amlogic/reboot.h b/kernel/aml-4.9/include/linux/amlogic/reboot.h
+index bf502233d..328929628 100644
+--- a/kernel/aml-4.9/include/linux/amlogic/reboot.h
++++ b/kernel/aml-4.9/include/linux/amlogic/reboot.h
+@@ -29,3 +29,4 @@
+ #define	MESON_CRASH_REBOOT					11
+ #define	MESON_KERNEL_PANIC					12
+ #define MESON_RECOVERY_QUIESCENT_REBOOT				14
++#define MESON_AUTO_REBOOT                   15
+-- 
+2.17.1
+

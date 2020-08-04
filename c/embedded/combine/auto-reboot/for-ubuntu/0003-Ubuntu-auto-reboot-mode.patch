@@ -1,0 +1,119 @@
+From ca3639504a88c75085d9b97e6f0e102de7b7496f Mon Sep 17 00:00:00 2001
+Date: Wed, 12 Jun 2019 13:53:26 +0800
+Subject: [PATCH] Ubuntu auto reboot mode
+
+Signed-off-by: yan <yan-wyb@foxmail.com>
+---
+ .../filesystem/special/BOARD-COMMON/etc/rc.local  |  7 +++++++
+ .../systemd/system/auto-reboot.service   | 17 +++++++++++++++++
+ .../usr/local/bin/reboot-test-handle.sh         |  7 +++++++
+ archives/filesystem/special/${board}/etc/rc.local   |  6 ++++++
+ config/bootscripts/aml_boot.ini                 |  4 ++--
+ config/bootscripts/s905_autoscript.cmd          |  4 ++--
+ 6 files changed, 41 insertions(+), 4 deletions(-)
+ create mode 100644 archives/filesystem/special/BOARD-COMMON/lib/systemd/system/auto-reboot.service
+ create mode 100755 archives/filesystem/special/BOARD-COMMON/usr/local/bin/reboot-test-handle.sh
+
+diff --git a/archives/filesystem/special/BOARD-COMMON/etc/rc.local b/archives/filesystem/special/BOARD-COMMON/etc/rc.local
+index 68f318d..920ada0 100755
+--- a/archives/filesystem/special/BOARD-COMMON/etc/rc.local
++++ b/archives/filesystem/special/BOARD-COMMON/etc/rc.local
+@@ -26,4 +26,11 @@ chmod 666 /dev/env
+ # Setup LED: heartbeat if bootup completed
+ echo heartbeat > /sys/class/leds/led-sys/trigger
+ 
++# Reboot test handle
++if cat /proc/cmdline | grep -q auto_reboot > /dev/null; then
++	if ! systemctl is-active auto-reboot | grep "^active$" > /dev/null; then
++		systemctl start auto-reboot
++	fi
++fi
++
+ exit 0
+diff --git a/archives/filesystem/special/BOARD-COMMON/lib/systemd/system/auto-reboot.service b/archives/filesystem/special/BOARD-COMMON/lib/systemd/system/auto-reboot.service
+new file mode 100644
+index 0000000..ace6896
+--- /dev/null
++++ b/archives/filesystem/special/BOARD-COMMON/lib/systemd/system/auto-reboot.service
+@@ -0,0 +1,17 @@
++#  This file is part of systemd.
++#
++#  systemd is free software; you can redistribute it and/or modify it
++#  under the terms of the GNU Lesser General Public License as published by
++#  the Free Software Foundation; either version 2.1 of the License, or
++#  (at your option) any later version.
++
++[Unit]
++Description=Khadas reboot test service
++#After=systemd-update-utmp-runlevel.service
++
++[Service]
++ExecStart=/usr/local/bin/reboot-test-handle.sh
++
++[Install]
++WantedBy=multi-user.target
++
+diff --git a/archives/filesystem/special/BOARD-COMMON/usr/local/bin/reboot-test-handle.sh b/archives/filesystem/special/BOARD-COMMON/usr/local/bin/reboot-test-handle.sh
+new file mode 100755
+index 0000000..2dd64e5
+--- /dev/null
++++ b/archives/filesystem/special/BOARD-COMMON/usr/local/bin/reboot-test-handle.sh
+@@ -0,0 +1,7 @@
++#!/bin/bash
++
++# Delay 15S
++sleep 15
++
++sync
++reboot -f auto_reboot
+diff --git a/archives/filesystem/special/${board}/etc/rc.local b/archives/filesystem/special/${board}/etc/rc.local
+index 529b424..dfa386b 100755
+--- a/archives/filesystem/special/${board}/etc/rc.local
++++ b/archives/filesystem/special/${board}/etc/rc.local
+@@ -26,5 +26,11 @@ chmod 777 /sys/class/display/mode
+ # Setup LED: heartbeat if bootup completed
+ echo heartbeat > /sys/class/leds/sys_led/trigger
+ 
++# Reboot test handle
++if cat /proc/cmdline | grep -q auto_reboot > /dev/null; then
++	if ! systemctl is-active auto-reboot | grep "^active$" > /dev/null; then
++		systemctl start auto-reboot
++	fi
++fi
+ 
+ exit 0
+diff --git a/config/bootscripts/aml_boot.ini b/config/bootscripts/aml_boot.ini
+index 97f1863..3468ea7 100644
+--- a/config/bootscripts/aml_boot.ini
++++ b/config/bootscripts/aml_boot.ini
+@@ -25,7 +25,7 @@ if test "$hostname" = "${board}"; then setenv ml_dtb "/dtb/amlogic/meson-gxl-s905x-
+ ## First, boot from mmc
+ ## 0 - SD card, higher priority
+ ## 1 - eMMC
+-for dev_num in ${mmc_devnums}; do for distro_bootpart in ${mmc_devplist}; do echo "Scanning mmc ${dev_num}:${distro_bootpart}..."; if load mmc ${dev_num}:${distro_bootpart} ${initrd_loadaddr} uInitrd; then if load mmc ${dev_num}:${distro_bootpart} ${kernel_loadaddr} zImage; then if load mmc ${dev_num}:${distro_bootpart} ${dtb_loadaddr} dtb.img || load mmc ${dev_num}:${distro_bootpart} ${dtb_loadaddr} ${ml_dtb}; then if load mmc ${dev_num}:${distro_bootpart} ${env_loadaddr} /boot/env.txt || load mmc ${dev_num}:${distro_bootpart} ${env_loadaddr} env.txt; then echo "Import env.txt"; env import -t ${env_loadaddr} ${filesize};fi;if test "X${rootdev}" = "X"; then echo "rootdev is missing! use default: root=LABEL=ROOTFS!";setenv rootdev "LABEL=ROOTFS";fi;if test "X${custom_ethmac}" != "X"; then echo "Found custom ethmac: ${custom_ethmac}, overwrite eth_mac!"; setenv eth_mac ${custom_ethmac};fi;if test "X${eth_mac}" = "X"; then echo "Set default mac address to ethaddr: ${ethaddr}!";setenv eth_mac ${ethaddr};setenv save_ethmac "yes";fi;if test -e mmc ${dev_num}:${boot_env_part} ${mark_prefix}.next; then echo "Booting mainline kernel...";setenv condev "console=ttyAML0,115200n8 console=tty0 no_console_suspend consoleblank=0";else echo "Booting legacy kernel...";setenv condev "console=ttyS0,115200n8 console=tty0 no_console_suspend consoleblank=0";fi;if test ; then fdt addr ${dtb_loadaddr};fdt resize 65536;fi;setenv bootargs "root=${rootdev} rootflags=data=writeback rw ${condev} ${hdmiargs} ${panelargs} fsck.repair=yes net.ifnames=0 ddr_size=${ddr_size} wol_enable=${wol_enable}  jtag=disable mac=${eth_mac} androidboot.mac=${eth_mac} save_ethmac=${save_ethmac} fan=${fan_mode} hwver=${hwver} coherent_pool=${dma_size}";run boot_start;fi;fi;fi;done;done;
++for dev_num in ${mmc_devnums}; do for distro_bootpart in ${mmc_devplist}; do echo "Scanning mmc ${dev_num}:${distro_bootpart}..."; if load mmc ${dev_num}:${distro_bootpart} ${initrd_loadaddr} uInitrd; then if load mmc ${dev_num}:${distro_bootpart} ${kernel_loadaddr} zImage; then if load mmc ${dev_num}:${distro_bootpart} ${dtb_loadaddr} dtb.img || load mmc ${dev_num}:${distro_bootpart} ${dtb_loadaddr} ${ml_dtb}; then if load mmc ${dev_num}:${distro_bootpart} ${env_loadaddr} /boot/env.txt || load mmc ${dev_num}:${distro_bootpart} ${env_loadaddr} env.txt; then echo "Import env.txt"; env import -t ${env_loadaddr} ${filesize};fi;if test "X${rootdev}" = "X"; then echo "rootdev is missing! use default: root=LABEL=ROOTFS!";setenv rootdev "LABEL=ROOTFS";fi;if test "X${custom_ethmac}" != "X"; then echo "Found custom ethmac: ${custom_ethmac}, overwrite eth_mac!"; setenv eth_mac ${custom_ethmac};fi;if test "X${eth_mac}" = "X"; then echo "Set default mac address to ethaddr: ${ethaddr}!";setenv eth_mac ${ethaddr};setenv save_ethmac "yes";fi;if test -e mmc ${dev_num}:${boot_env_part} ${mark_prefix}.next; then echo "Booting mainline kernel...";setenv condev "console=ttyAML0,115200n8 console=tty0 no_console_suspend consoleblank=0";else echo "Booting legacy kernel...";setenv condev "console=ttyS0,115200n8 console=tty0 no_console_suspend consoleblank=0";fi;if test ; then fdt addr ${dtb_loadaddr};fdt resize 65536;fi;setenv bootargs "root=${rootdev} rootflags=data=writeback rw ${condev} ${hdmiargs} ${panelargs} fsck.repair=yes net.ifnames=0 ddr_size=${ddr_size} wol_enable=${wol_enable} jtag=disable mac=${eth_mac} androidboot.mac=${eth_mac} save_ethmac=${save_ethmac} fan=${fan_mode} hwver=${hwver} coherent_pool=${dma_size} reboot_mode=${reboot_mode}";run boot_start;fi;fi;fi;done;done;
+ 
+ ## Second, boot from USB storage
+-for dev_num in ${usb_devnums}; do for distro_bootpart in ${usb_devplist}; do echo "Scanning usb ${dev_num}:${distro_bootpart}...";if fatload usb ${dev_num}:${distro_bootpart} ${initrd_loadaddr} uInitrd; then if fatload usb ${dev_num}:${distro_bootpart} ${kernel_loadaddr} zImage; then if fatload usb ${dev_num}:${distro_bootpart} ${dtb_loadaddr} dtb.img || fatload usb ${dev_num}:${distro_bootpart} ${dtb_loadaddr} ${ml_dtb}; then if fatload usb ${dev_num}:${distro_bootpart} ${env_loadaddr} /boot/env.txt || fatload usb ${dev_num}:${distro_bootpart} ${env_loadaddr} env.txt; then echo "Import env.txt"; env import -t ${env_loadaddr} ${filesize};fi;if test "X${rootdev}" = "X"; then echo "rootdev is missing! use default: root=LABEL=ROOTFS!";setenv rootdev "LABEL=ROOTFS";fi;if test "X${custom_ethmac}" != "X"; then echo "Found custom ethmac: ${custom_ethmac}, overwrite eth_mac!"; setenv eth_mac ${custom_ethmac};fi;if test "X${eth_mac}" = "X"; then echo "Set default mac address to ethaddr: ${ethaddr}!";setenv eth_mac ${ethaddr};setenv save_ethmac "yes";fi;if test -e usb ${dev_num}:${distro_bootpart} ${mark_prefix}.next; then echo "Booting mainline kernel...";setenv condev "console=ttyAML0,115200n8 console=tty0 no_console_suspend consoleblank=0";else echo "Booting legacy kernel...";setenv condev "console=ttyS0,115200n8 console=tty0 no_console_suspend consoleblank=0";fi;if test ; then fdt addr ${dtb_loadaddr};fdt resize 65536;fi;setenv bootargs "root=${rootdev} rootflags=data=writeback rw ${condev} ${hdmiargs} ${panelargs} fsck.repair=yes net.ifnames=0 ddr_size=${ddr_size} wol_enable=${wol_enable} jtag=disable mac=${eth_mac} androidboot.mac=${eth_mac} save_ethmac=${save_ethmac} fan=${fan_mode} hwver=${hwver} coherent_pool=${dma_size}";run boot_start;fi;fi;fi;done;done;
++for dev_num in ${usb_devnums}; do for distro_bootpart in ${usb_devplist}; do echo "Scanning usb ${dev_num}:${distro_bootpart}...";if fatload usb ${dev_num}:${distro_bootpart} ${initrd_loadaddr} uInitrd; then if fatload usb ${dev_num}:${distro_bootpart} ${kernel_loadaddr} zImage; then if fatload usb ${dev_num}:${distro_bootpart} ${dtb_loadaddr} dtb.img || fatload usb ${dev_num}:${distro_bootpart} ${dtb_loadaddr} ${ml_dtb}; then if fatload usb ${dev_num}:${distro_bootpart} ${env_loadaddr} /boot/env.txt || fatload usb ${dev_num}:${distro_bootpart} ${env_loadaddr} env.txt; then echo "Import env.txt"; env import -t ${env_loadaddr} ${filesize};fi;if test "X${rootdev}" = "X"; then echo "rootdev is missing! use default: root=LABEL=ROOTFS!";setenv rootdev "LABEL=ROOTFS";fi;if test "X${custom_ethmac}" != "X"; then echo "Found custom ethmac: ${custom_ethmac}, overwrite eth_mac!"; setenv eth_mac ${custom_ethmac};fi;if test "X${eth_mac}" = "X"; then echo "Set default mac address to ethaddr: ${ethaddr}!";setenv eth_mac ${ethaddr};setenv save_ethmac "yes";fi;if test -e usb ${dev_num}:${distro_bootpart} ${mark_prefix}.next; then echo "Booting mainline kernel...";setenv condev "console=ttyAML0,115200n8 console=tty0 no_console_suspend consoleblank=0";else echo "Booting legacy kernel...";setenv condev "console=ttyS0,115200n8 console=tty0 no_console_suspend consoleblank=0";fi;if test ; then fdt addr ${dtb_loadaddr};fdt resize 65536;fi;setenv bootargs "root=${rootdev} rootflags=data=writeback rw ${condev} ${hdmiargs} ${panelargs} fsck.repair=yes net.ifnames=0 ddr_size=${ddr_size} wol_enable=${wol_enable} jtag=disable mac=${eth_mac} androidboot.mac=${eth_mac} save_ethmac=${save_ethmac} fan=${fan_mode} hwver=${hwver} coherent_pool=${dma_size} reboot_mode=${reboot_mode}";run boot_start;fi;fi;fi;done;done;
+diff --git a/config/bootscripts/s905_autoscript.cmd b/config/bootscripts/s905_autoscript.cmd
+index 27e19dc..e4c3ab2 100644
+--- a/config/bootscripts/s905_autoscript.cmd
++++ b/config/bootscripts/s905_autoscript.cmd
+@@ -63,7 +63,7 @@ for dev_num in ${mmc_devnums}; do
+ 					fi;
+-					setenv bootargs "root=${rootdev} rootflags=data=writeback rw ${condev} ${hdmiargs} ${panelargs} fsck.repair=yes net.ifnames=0 ddr_size=${ddr_size} wol_enable=${wol_enable}  jtag=disable mac=${eth_mac} androidboot.mac=${eth_mac} save_ethmac=${save_ethmac} fan=${fan_mode} hwver=${hwver} coherent_pool=${dma_size}";
++					setenv bootargs "root=${rootdev} rootflags=data=writeback rw ${condev} ${hdmiargs} ${panelargs} fsck.repair=yes net.ifnames=0 ddr_size=${ddr_size} wol_enable=${wol_enable}  jtag=disable mac=${eth_mac} androidboot.mac=${eth_mac} save_ethmac=${save_ethmac} fan=${fan_mode} hwver=${hwver} coherent_pool=${dma_size} reboot_mode=${reboot_mode}";
+ 					run boot_start;
+ 				fi;
+ 			fi;
+@@ -107,7 +107,7 @@ for dev_num in ${usb_devnums}; do
+ 					fi;
+-					setenv bootargs "root=${rootdev} rootflags=data=writeback rw ${condev} ${hdmiargs} ${panelargs} fsck.repair=yes net.ifnames=0 ddr_size=${ddr_size} wol_enable=${wol_enable} jtag=disable mac=${eth_mac} androidboot.mac=${eth_mac} save_ethmac=${save_ethmac} fan=${fan_mode} hwver=${hwver} coherent_pool=${dma_size}";
++					setenv bootargs "root=${rootdev} rootflags=data=writeback rw ${condev} ${hdmiargs} ${panelargs} fsck.repair=yes net.ifnames=0 ddr_size=${ddr_size} wol_enable=${wol_enable} jtag=disable mac=${eth_mac} androidboot.mac=${eth_mac} save_ethmac=${save_ethmac} fan=${fan_mode} hwver=${hwver} coherent_pool=${dma_size} reboot_mode=${reboot_mode}";
+ 					run boot_start;
+ 				fi;
+ 			fi;
+-- 
+2.17.1
+

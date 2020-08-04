@@ -1,0 +1,73 @@
+From b8717889459e3dae25252cb652d4c9f840accfdf Mon Sep 17 00:00:00 2001
+From: yan <yan-wyb@foxmail.com>
+Date: Tue, 18 Jun 2019 16:34:49 +0800
+Subject: [PATCH] uboot auto reboot mode
+
+Signed-off-by: yan <yan-wyb@foxmail.com>
+---
+ arch/arm/include/asm/reboot.h | 1 +
+ board/khadas/configs/${board}.h  | 2 +-
+ common/cmd_reboot.c           | 8 ++++++++
+ 3 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm/include/asm/reboot.h b/arch/arm/include/asm/reboot.h
+index 0cdc3cdf06..6c47a3b8da 100644
+--- a/arch/arm/include/asm/reboot.h
++++ b/arch/arm/include/asm/reboot.h
+@@ -56,6 +56,7 @@ Reboot reason AND corresponding env setting:
+ #define AMLOGIC_KERNEL_PANIC			12
+ #define AMLOGIC_WATCHDOG_REBOOT			13
+ #define AMLOGIC_RECOVERY_QUIESCENT_REBOOT	14
++#define AMLOGIC_AUTO_REBOOT				15
+ 
+ /*
+ old version env
+diff --git a/board/khadas/configs/${board}.h b/board/khadas/configs/${board}.h
+index 6bf2b9f890..007c68f21a 100644
+--- a/board/khadas/configs/${board}.h
++++ b/board/khadas/configs/${board}.h
+@@ -140,7 +140,7 @@
+             "\0"\
+         "storeargs="\
+             "setenv bootargs ${initargs} logo=${display_layer},loaded,${fb_addr} vout=${outputmode},enable hdmitx=${cecconfig},${colorattribute} hdmimode=${hdmimode} cvbsmode=${cvbsmode} osd_reverse=${osd_reverse} video_reverse=${video_reverse} jtag=${jtag}; "\
+-	"setenv bootargs ${bootargs} androidboot.hardware=amlogic;"\
++	"setenv bootargs ${bootargs} androidboot.hardware=amlogic; reboot_mode=${reboot_mode};"\
+             "run cmdline_keys;"\
+             "\0"\
+         "switch_bootmode="\
+diff --git a/common/cmd_reboot.c b/common/cmd_reboot.c
+index df9f0ca6f7..5243ad2452 100644
+--- a/common/cmd_reboot.c
++++ b/common/cmd_reboot.c
+@@ -115,6 +115,11 @@ int do_get_rebootmode (cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[]
+ 			setenv("reboot_mode","recovery_quiescent");
+ 			break;
+ 		}
++		case AMLOGIC_AUTO_REBOOT:
++		{
++			setenv("reboot_mode","auto_reboot");
++			break;
++		}
+ 		default:
+ 		{
+ 			setenv("reboot_mode","charging");
+@@ -174,6 +179,8 @@ int do_reboot (cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
+ 			reboot_mode_val = AMLOGIC_KERNEL_PANIC;
+ 		else if (strcmp(mode, "rpmbp") == 0)
+ 			reboot_mode_val = AMLOGIC_RPMBP_REBOOT;
++		else if (strcmp(mode, "auto_reboot") == 0)
++			reboot_mode_val = AMLOGIC_AUTO_REBOOT;
+ 		else {
+ 			printf("Can not find match reboot mode, use normal by default\n");
+ 			reboot_mode_val = AMLOGIC_NORMAL_BOOT;
+@@ -233,6 +240,7 @@ U_BOOT_CMD(
+ 	"    suspend_off\n"
+ 	"    hibernate\n"
+ 	"    crash_dump\n"
++	"    auto_reboot\n"
+ );
+ 
+ U_BOOT_CMD(
+-- 
+2.17.1
+

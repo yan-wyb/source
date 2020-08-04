@@ -1,0 +1,35 @@
+From 366ca385001b0f2676eedaa0be3e252886da0d30 Mon Sep 17 00:00:00 2001
+From: yan <yan-wyb@foxmail.com>
+Date: Fri, 19 Apr 2019 09:18:58 +0800
+Subject: [PATCH] kernel auto reboot mode
+
+---
+ drivers/amlogic/reboot/reboot.c | 2 ++
+ include/linux/amlogic/reboot.h  | 1 +
+ 2 files changed, 3 insertions(+)
+
+diff --git a/drivers/amlogic/reboot/reboot.c b/drivers/amlogic/reboot/reboot.c
+index 6e5cd09ad035..a07f2582eb00 100644
+--- a/drivers/amlogic/reboot/reboot.c
++++ b/drivers/amlogic/reboot/reboot.c
+@@ -69,6 +69,8 @@ static u32 parse_reason(const char *cmd)
+ 				strcmp(cmd, "quiescent,recovery") == 0 ||
+ 				strcmp(cmd, "quiescent,factory_reset") == 0)
+ 			reboot_reason = MESON_RECOVERY_QUIESCENT_REBOOT;
++		else if (strcmp(cmd, "auto_reboot") == 0)
++				reboot_reason = MESON_AUTO_REBOOT;
+ 	} else {
+ 		if (kernel_panic) {
+ 			if (strcmp(kernel_panic, "kernel_panic") == 0) {
+diff --git a/include/linux/amlogic/reboot.h b/include/linux/amlogic/reboot.h
+index bf502233d76a..b2ebc41ffff6 100644
+--- a/include/linux/amlogic/reboot.h
++++ b/include/linux/amlogic/reboot.h
+@@ -29,3 +29,4 @@
+ #define	MESON_CRASH_REBOOT					11
+ #define	MESON_KERNEL_PANIC					12
+ #define MESON_RECOVERY_QUIESCENT_REBOOT				14
++#define MESON_AUTO_REBOOT					15
+-- 
+2.17.1
+
